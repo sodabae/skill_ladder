@@ -3,7 +3,7 @@
 #include <iostream>
 
 #include "eventBus.h"
-#include "updateEvent.h"
+#include "UpdateEvent.h"
 
 class MovementSystem
 {

@@ -4,14 +4,17 @@
 #include <chrono>
 
 #include "eventBus.h"
-#include "updateEvent.h"
+#include "UpdateEvent.h"
 #include "MovementSystem.h"
+#include "Logger.h"
 
 int main()
 {
     eventBus bus;
 
     MovementSystem movement(bus);
+    Logger logger(bus);
+    logger.subscribeUpdateEvent();
 
     for (int i=0; i<5; ++i)
     {
