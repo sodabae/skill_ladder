@@ -21,3 +21,8 @@ target_compile_options(sim_eng PRIVATE
     -Wconversion
     -Wsign-conversion
 )
+
+target_include_directories(sim_eng PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/event
+)
