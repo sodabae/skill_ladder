@@ -1,29 +1,3 @@
-//{
-//    "version": "0.2.0",
-//    "configurations": [
-//        {
-//            "name": "Debug sim_eng",
-//            "type": "cppdbg",
-//            "request": "launch",
-//            "program": "${workspaceFolder}/build/sim_eng",
-//            "cwd": "${workspaceFolder}",
-//            "MIMode": "gdb",
-//            "miDebuggerPath": "/usr/bin/gdb",
-//            "stopAtEntry": false,
-//
-//            "setupCommands": [
-//                {
-//                    "text": "-enable-pretty-printing"
-//                },
-//                {
-//                    "text": "skip -rfu ^std::"
-//                }
-//            ]
-//        }
-//    ]
-//}
-
-
 {
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
