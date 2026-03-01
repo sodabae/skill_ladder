@@ -34,6 +34,6 @@ int main()
     bus.publish(ev);
     bus.publish(dmg);
 
-    bus.unsubscribe<objectMoved>(oId);
-    bus.unsubscribe<damageTaken>(dId);
+    //bus.unsubscribe<objectMoved>(oId);
+    //bus.unsubscribe<damageTaken>(dId);
 }
