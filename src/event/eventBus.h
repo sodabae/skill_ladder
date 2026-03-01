@@ -6,8 +6,6 @@
 #include <typeindex>
 #include <algorithm>
 
-#include "event.h" 
-
 struct handlerCB
 {
     std::size_t id;
@@ -88,11 +86,17 @@ public:
     template<typename EventT>
     Subscription subscribe(Handler<EventT> handler)
     {
+        //create callback function handler/variable
         auto wrapper = [handler](const void* eventPtr)
         {
             handler(*static_cast<const EventT*>(eventPtr));
         };
-        m_subscribers[typeid(EventT)].push_back(handlerCB{m_nextId, wrapper});
+
+        if (m_publishDepth > 0)
+            m_pendingSubscribers[typeid(EventT)].push_back(handlerCB{m_nextId, wrapper});
+        else
+            m_subscribers[typeid(EventT)].push_back(handlerCB{m_nextId, wrapper});
+
         return Subscription(this, typeid(EventT), m_nextId++);
 
     }
@@ -100,25 +104,7 @@ public:
     template<typename EventT>
     void unsubscribe(std::size_t id)
     {
-        //get the map iterators of the std::vector from the map
-        auto it = m_subscribers.find(typeid(EventT));
-        if (it != m_subscribers.end())
-        {
-            auto& vec = it->second;
-
-            // find the item in the vector that has the id being search for, and set to "not alive"
-            for (auto &item : vec)
-            {
-                if (item.id == id)
-                    item.alive = false;
-            }
-
-
-            if (m_publishDepth == 0)
-            {
-                cleanup(vec);
-            }
-        }
+        unsubscribeByType(typeid(EventT), id);
     }
 
     template<typename EventT>
@@ -143,6 +129,7 @@ public:
             if(m_publishDepth == 0)
             {
                 cleanup(it->second);
+                addPending(typeid(EventT));
             }
         }
     }
@@ -157,6 +144,22 @@ public:
             cbs.end()
         );
     }
+
+    void addPending(std::type_index typeIdx)
+    {
+        //if there are any pending subscribers with this event type_index, add them to the subscriber list
+        auto it = m_pendingSubscribers.find(typeIdx);
+        if (it != m_pendingSubscribers.end())
+        {
+            m_subscribers[typeIdx].insert(
+                m_subscribers[typeIdx].end(),
+                it->second.begin(),
+                it->second.end()
+            );
+            m_pendingSubscribers[typeIdx].clear();
+        }
+    }
+
 private:
     void unsubscribeByType(std::type_index type, std::size_t id)
     {
@@ -184,6 +187,9 @@ private:
 
     std::unordered_map<std::type_index,
                        std::vector<handlerCB>> m_subscribers;
+
+    std::unordered_map<std::type_index,
+                       std::vector<handlerCB>> m_pendingSubscribers;
     
     std::size_t m_nextId{0};
     std::size_t m_publishDepth{0};
