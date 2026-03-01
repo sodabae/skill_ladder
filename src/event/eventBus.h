@@ -12,6 +12,7 @@ struct handlerCB
 {
     std::size_t id;
     std::function<void(const void*)> fn;
+    bool alive{true};
 };
 
 class eventBus
@@ -42,13 +43,18 @@ public:
         {
             auto& vec = it->second;
 
-            //erase from the iterator to the end of the vector
-            //  Note: the remove_if returns an iterator and puts the matching element at the end
-            vec.erase(
-                //remove_if - puts the item to be erased at the end
-                std::remove_if(vec.begin(), vec.end(), [id](const handlerCB &item){return item.id==id;}),
-                vec.end() 
-            );
+            // find the item in the vector that has the id being search for, and set to "not alive"
+            for (auto &item : vec)
+            {
+                if (item.id == id)
+                    item.alive = false;
+            }
+
+
+            if (m_publishDepth == 0)
+            {
+                cleanup<EventT>(vec);
+            }
         }
     }
 
@@ -61,11 +67,33 @@ public:
         //if any are subscribers are found, loop through them
         if (it != m_subscribers.end())
         {        
+            ++m_publishDepth;
             for (auto& handler : it->second)
             {
-                handler.fn(&event);
+                if (handler.alive)
+                {
+                    handler.fn(&event);
+                }
+            }
+            --m_publishDepth;
+
+            if(m_publishDepth == 0)
+            {
+                cleanup<EventT>(it->second);
             }
         }
+    }
+
+    template<typename EventT>
+    void cleanup(std::vector<handlerCB>& cbs)
+    {
+        cbs.erase(
+            std::remove_if(
+                cbs.begin(), 
+                cbs.end(),
+                [](const handlerCB h){return h.alive == false;}),
+            cbs.end()
+        );
     }
 
 private:
@@ -75,4 +103,5 @@ private:
                        std::vector<handlerCB>> m_subscribers;
     
     std::size_t m_nextId{0};
+    std::size_t m_publishDepth{0};
 };
