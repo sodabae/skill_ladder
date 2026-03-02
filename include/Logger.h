@@ -1,5 +1,9 @@
 #pragma once
 
+#include <iostream>
+#include <vector>
+
+#include "eventBus.h"
 #include "UpdateEvent.h"
 
 class Logger
