@@ -792,3 +792,759 @@ TEST(PcieDeviceTest, BurstReadWorks)
     for (int i = 0; i < 100; ++i)
         EXPECT_EQ(buffer[i], i);
 }
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+
+
+{
+  "backend_type": "mock",
+  "register_space_size": 512,
+  "burst_start_offset": 10,
+  "burst_count": 100,
+  "write_offset": 200,
+  "bdf": "0000:01:00.0"
+}
+
+//---------------
+// main.cpp
+
+#include <iostream>
+#include <fstream>
+#include <memory>
+#include <thread>
+#include <chrono>
+#include <array>
+
+#include <nlohmann/json.hpp>
+
+#include "PcieDevice.hpp"
+#include "MmapBackend.hpp"
+#include "MockBackend.hpp"
+
+using json = nlohmann::json;
+
+int main(int argc, char* argv[])
+{
+    if (argc < 2)
+    {
+        std::cerr << "Usage: ./pcie_app config.json\n";
+        return 1;
+    }
+
+    std::ifstream configFile(argv[1]);
+    if (!configFile)
+    {
+        std::cerr << "Failed to open config file\n";
+        return 1;
+    }
+
+    json config;
+    configFile >> config;
+
+    std::string backendType = config["backend_type"];
+    uint32_t registerSpaceSize = config["register_space_size"];
+    uint32_t burstStart = config["burst_start_offset"];
+    uint32_t burstCount = config["burst_count"];
+    uint32_t writeOffset = config["write_offset"];
+    std::string bdf = config["bdf"];
+
+    std::unique_ptr<IMmioBackend> backend;
+
+    if (backendType == "mock")
+    {
+        backend = std::make_unique<MockBackend>(registerSpaceSize);
+
+        // Optional: preload fake values
+        for (uint32_t i = 0; i < burstCount; ++i)
+        {
+            backend->write(burstStart + i, i);
+        }
+    }
+    else if (backendType == "hardware")
+    {
+        backend = std::make_unique<MmapBackend>(bdf);
+    }
+    else
+    {
+        std::cerr << "Invalid backend_type\n";
+        return 1;
+    }
+
+    PcieDevice device(std::move(backend));
+
+    std::array<uint32_t, 3> singleReads{};
+    std::vector<uint32_t> burstBuffer(burstCount);
+
+    for (int iteration = 0; iteration < 3; ++iteration)
+    {
+        std::cout << "Iteration " << iteration + 1 << "\n";
+
+        singleReads[0] = device.readRegister(0);
+        singleReads[1] = device.readRegister(1);
+        singleReads[2] = device.readRegister(2);
+
+        std::cout << "Single reads: "
+                  << singleReads[0] << ", "
+                  << singleReads[1] << ", "
+                  << singleReads[2] << "\n";
+
+        device.burstRead(burstStart, burstCount, burstBuffer.data());
+
+        std::cout << "Burst read complete\n";
+
+        device.writeRegister(writeOffset, 0xCAFEBABE);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+
+    std::cout << "Done.\n";
+    return 0;
+}
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+//factory
+----------------------------------------------------------------
+
+#pragma once
+
+#include <memory>
+#include <string>
+#include <stdexcept>
+
+#include "IMmioBackend.h"
+#include "MmapBackend.h"
+#include "MockBackend.h"
+
+class BackendFactory
+{
+public:
+    enum class Type
+    {
+        Real,
+        Mock
+    };
+
+    static std::unique_ptr<IMmioBackend>
+    create(Type type,
+           const std::string& deviceId,
+           std::size_t bar,
+           std::size_t size)
+    {
+        switch (type)
+        {
+            case Type::Real:
+                return std::make_unique<MmapBackend>(deviceId, bar, size);
+
+            case Type::Mock:
+                return std::make_unique<MockBackend>(size);
+
+            default:
+                throw std::runtime_error("Unknown backend type");
+        }
+    }
+
+    static Type fromString(const std::string& typeStr)
+    {
+        if (typeStr == "real")
+            return Type::Real;
+
+        if (typeStr == "mock")
+            return Type::Mock;
+
+        throw std::runtime_error("Invalid backend type string: " + typeStr);
+    }
+};
+
+
+//-----------------
+
+{
+  "backend": {
+    "type": "real",
+    "device": "0000:01:00.0",
+    "bar": 0,
+    "size": 4096
+  },
+  "access": {
+    "offset": 0,
+    "burst_count": 100
+  }
+}
+//-----------------
+//main.cpp
+
+#include <fstream>
+#include <iostream>
+#include <nlohmann/json.hpp>
+
+#include "BackendFactory.h"
+#include "PcieDevice.h"
+
+int main()
+{
+    std::ifstream file("config.json");
+    nlohmann::json config;
+    file >> config;
+
+    const auto& backendConfig = config["backend"];
+
+    auto type = BackendFactory::fromString(
+        backendConfig["type"].get<std::string>());
+
+    std::string deviceId = backendConfig["device"];
+    std::size_t bar = backendConfig["bar"];
+    std::size_t size = backendConfig["size"];
+
+    auto backend = BackendFactory::create(type, deviceId, bar, size);
+
+    PcieDevice device(std::move(backend));
+
+    device.performAccessSequence();
+
+    return 0;
+}
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+//self backend classes
+----------------------------------------------------------------
+
+#pragma once
+
+#include <memory>
+#include <functional>
+#include <unordered_map>
+#include <string>
+#include <stdexcept>
+
+#include "IMmioBackend.h"
+#include <nlohmann/json.hpp>
+
+class BackendRegistry
+{
+public:
+    using Creator =
+        std::function<std::unique_ptr<IMmioBackend>(const nlohmann::json&)>;
+
+    static BackendRegistry& instance()
+    {
+        static BackendRegistry registry;
+        return registry;
+    }
+
+    void registerBackend(const std::string& name, Creator creator)
+    {
+        creators_[name] = std::move(creator);
+    }
+
+    std::unique_ptr<IMmioBackend>
+    create(const std::string& name,
+           const nlohmann::json& config) const
+    {
+        auto it = creators_.find(name);
+        if (it == creators_.end())
+            throw std::runtime_error("Unknown backend: " + name);
+
+        return it->second(config);
+    }
+
+private:
+    std::unordered_map<std::string, Creator> creators_;
+};
+
+
+//--------------
+// MmapBackend.cpp
+#include "BackendRegistry.h"
+#include "MmapBackend.h"
+
+namespace
+{
+    const bool registered = []()
+    {
+        BackendRegistry::instance().registerBackend(
+            "real",
+            [](const nlohmann::json& config)
+            {
+                return std::make_unique<MmapBackend>(
+                    config["device"],
+                    config["bar"],
+                    config["size"]);
+            });
+
+        return true;
+    }();
+}
+
+
+//--------------
+// MockBackend.cpp
+
+namespace
+{
+    const bool registered = []()
+    {
+        BackendRegistry::instance().registerBackend(
+            "mock",
+            [](const nlohmann::json& config)
+            {
+                return std::make_unique<MockBackend>(
+                    config["size"]);
+            });
+
+        return true;
+    }();
+}
+
+
+//--------------
+//main.cpp
+
+int main()
+{
+    std::ifstream file("config.json");
+    nlohmann::json config;
+    file >> config;
+
+    const auto& backendCfg = config["backend"];
+
+    auto backend =
+        BackendRegistry::instance().create(
+            backendCfg["type"],
+            backendCfg);
+
+    PcieDevice device(std::move(backend));
+
+    device.performAccessSequence();
+
+    return 0;
+}
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+//Full code...
+----------------------------------------------------------------
+class IMmioBackend
+{
+public:
+    virtual ~IMmioBackend() = default;
+
+    virtual uint32_t read32(std::size_t offset) = 0;
+    virtual void write32(std::size_t offset, uint32_t value) = 0;
+    virtual void burstRead32(std::size_t offset,
+                             uint32_t* buffer,
+                             std::size_t count) = 0;
+};
+
+//------------
+// MockBackend.h
+
+#pragma once
+
+#include "IMmioBackend.h"
+#include <vector>
+#include <cstddef>
+#include <cstdint>
+
+class MockBackend : public IMmioBackend
+{
+public:
+    explicit MockBackend(std::size_t sizeBytes);
+
+    uint32_t read32(std::size_t offset) override;
+    void write32(std::size_t offset, uint32_t value) override;
+    void burstRead32(std::size_t offset,
+                     uint32_t* buffer,
+                     std::size_t count) override;
+
+private:
+    std::vector<uint32_t> memory_;
+};
+
+
+//------------
+// MockBackend.cpp
+
+#include "MockBackend.h"
+#include "BackendRegistry.h"
+
+#include <stdexcept>
+#include <cstring>
+
+MockBackend::MockBackend(std::size_t sizeBytes)
+{
+    if (sizeBytes % 4 != 0)
+        throw std::runtime_error("MockBackend size must be multiple of 4");
+
+    memory_.resize(sizeBytes / 4, 0);
+}
+
+uint32_t MockBackend::read32(std::size_t offset)
+{
+    if (offset % 4 != 0)
+        throw std::runtime_error("Unaligned read32");
+
+    std::size_t index = offset / 4;
+
+    if (index >= memory_.size())
+        throw std::runtime_error("Read out of range");
+
+    return memory_[index];
+}
+
+void MockBackend::write32(std::size_t offset, uint32_t value)
+{
+    if (offset % 4 != 0)
+        throw std::runtime_error("Unaligned write32");
+
+    std::size_t index = offset / 4;
+
+    if (index >= memory_.size())
+        throw std::runtime_error("Write out of range");
+
+    memory_[index] = value;
+}
+
+void MockBackend::burstRead32(std::size_t offset,
+                              uint32_t* buffer,
+                              std::size_t count)
+{
+    if (offset % 4 != 0)
+        throw std::runtime_error("Unaligned burstRead32");
+
+    std::size_t index = offset / 4;
+
+    if (index + count > memory_.size())
+        throw std::runtime_error("Burst read out of range");
+
+    std::memcpy(buffer,
+                &memory_[index],
+                count * sizeof(uint32_t));
+}
+
+/* ---------- Self Registration ---------- */
+
+namespace
+{
+    const bool registered = []()
+    {
+        BackendRegistry::instance().registerBackend(
+            "mock",
+            [](const nlohmann::json& config)
+            {
+                return std::make_unique<MockBackend>(
+                    config["size"]);
+            });
+
+        return true;
+    }();
+}
+
+//-------------------
+// MmapBackend.h
+
+#pragma once
+
+#include "IMmioBackend.h"
+#include <string>
+#include <cstddef>
+#include <cstdint>
+
+class MmapBackend : public IMmioBackend
+{
+public:
+    MmapBackend(const std::string& deviceId,
+                std::size_t bar,
+                std::size_t sizeBytes);
+
+    ~MmapBackend();
+
+    uint32_t read32(std::size_t offset) override;
+    void write32(std::size_t offset, uint32_t value) override;
+    void burstRead32(std::size_t offset,
+                     uint32_t* buffer,
+                     std::size_t count) override;
+
+private:
+    int fd_ = -1;
+    void* mappedBase_ = nullptr;
+    std::size_t size_;
+};
+
+//-----------
+//MmapBackend.cpp
+
+#include "MmapBackend.h"
+#include "BackendRegistry.h"
+
+#include <stdexcept>
+#include <sstream>
+#include <cstring>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
+
+MmapBackend::MmapBackend(const std::string& deviceId,
+                         std::size_t bar,
+                         std::size_t sizeBytes)
+    : size_(sizeBytes)
+{
+    std::ostringstream path;
+    path << "/sys/bus/pci/devices/"
+         << deviceId
+         << "/resource"
+         << bar;
+
+    fd_ = ::open(path.str().c_str(), O_RDWR | O_SYNC);
+    if (fd_ < 0)
+        throw std::runtime_error("Failed to open PCI resource");
+
+    mappedBase_ = ::mmap(nullptr,
+                         size_,
+                         PROT_READ | PROT_WRITE,
+                         MAP_SHARED,
+                         fd_,
+                         0);
+
+    if (mappedBase_ == MAP_FAILED)
+    {
+        ::close(fd_);
+        throw std::runtime_error("mmap failed");
+    }
+}
+
+MmapBackend::~MmapBackend()
+{
+    if (mappedBase_ && mappedBase_ != MAP_FAILED)
+        ::munmap(mappedBase_, size_);
+
+    if (fd_ >= 0)
+        ::close(fd_);
+}
+
+uint32_t MmapBackend::read32(std::size_t offset)
+{
+    if (offset % 4 != 0)
+        throw std::runtime_error("Unaligned read32");
+
+    if (offset >= size_)
+        throw std::runtime_error("Read out of range");
+
+    volatile uint32_t* base =
+        reinterpret_cast<volatile uint32_t*>(mappedBase_);
+
+    return base[offset / 4];
+}
+
+void MmapBackend::write32(std::size_t offset, uint32_t value)
+{
+    if (offset % 4 != 0)
+        throw std::runtime_error("Unaligned write32");
+
+    if (offset >= size_)
+        throw std::runtime_error("Write out of range");
+
+    volatile uint32_t* base =
+        reinterpret_cast<volatile uint32_t*>(mappedBase_);
+
+    base[offset / 4] = value;
+}
+
+void MmapBackend::burstRead32(std::size_t offset,
+                              uint32_t* buffer,
+                              std::size_t count)
+{
+    if (offset % 4 != 0)
+        throw std::runtime_error("Unaligned burstRead32");
+
+    if (offset + count * 4 > size_)
+        throw std::runtime_error("Burst read out of range");
+
+    volatile uint32_t* base =
+        reinterpret_cast<volatile uint32_t*>(mappedBase_);
+
+    std::memcpy(buffer,
+                const_cast<uint32_t*>(&base[offset / 4]),
+                count * sizeof(uint32_t));
+}
+
+/* ---------- Self Registration ---------- */
+
+namespace
+{
+    const bool registered = []()
+    {
+        BackendRegistry::instance().registerBackend(
+            "real",
+            [](const nlohmann::json& config)
+            {
+                return std::make_unique<MmapBackend>(
+                    config["device"],
+                    config["bar"],
+                    config["size"]);
+            });
+
+        return true;
+    }();
+}
+
+
+
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+----------------------------------------------------------------
+gtest
+----------------------------------------------------------------
+
+//mock_backend
+
+#include <gtest/gtest.h>
+#include "MockBackend.h"
+
+TEST(MockBackendTest, ReadWrite32)
+{
+    MockBackend backend(1024); // 1 KB
+
+    backend.write32(0, 0x12345678);
+    uint32_t value = backend.read32(0);
+
+    EXPECT_EQ(value, 0x12345678);
+}
+
+TEST(MockBackendTest, BurstRead32)
+{
+    MockBackend backend(1024);
+
+    for (int i = 0; i < 100; ++i)
+        backend.write32(i * 4, i);
+
+    uint32_t buffer[100] = {};
+
+    backend.burstRead32(0, buffer, 100);
+
+    for (int i = 0; i < 100; ++i)
+        EXPECT_EQ(buffer[i], static_cast<uint32_t>(i));
+}
+
+TEST(MockBackendTest, OutOfRangeThrows)
+{
+    MockBackend backend(16);
+
+    EXPECT_THROW(backend.read32(32), std::runtime_error);
+    EXPECT_THROW(backend.write32(32, 0), std::runtime_error);
+}
+
+
+
+//--------------
+//registry
+
+#include <gtest/gtest.h>
+#include "BackendRegistry.h"
+#include "MockBackend.h"
+#include <nlohmann/json.hpp>
+
+TEST(BackendRegistryTest, CreateMockBackend)
+{
+    nlohmann::json config = {
+        {"type", "mock"},
+        {"size", 1024}
+    };
+
+    auto backend =
+        BackendRegistry::instance().create("mock", config);
+
+    ASSERT_NE(backend, nullptr);
+
+    backend->write32(0, 42);
+    EXPECT_EQ(backend->read32(0), 42);
+}
+
+TEST(BackendRegistryTest, UnknownBackendThrows)
+{
+    nlohmann::json config;
+
+    EXPECT_THROW(
+        BackendRegistry::instance().create("does_not_exist", config),
+        std::runtime_error);
+}
+
+
+//------------------
+// pcieDevice
+
+//assuming....
+void PcieDevice::performAccessSequence()
+{
+    backend_->read32(0);
+    backend_->read32(4);
+    backend_->read32(8);
+
+    uint32_t buffer[100];
+    backend_->burstRead32(12, buffer, 100);
+
+    backend_->write32(412, 0xDEADBEEF);
+}
+
+//test
+TEST(PcieDeviceTest, AccessSequenceWritesCorrectValue)
+{
+    auto mock = std::make_unique<MockBackend>(2048);
+    MockBackend* raw = mock.get();
+
+    PcieDevice device(std::move(mock));
+
+    device.performAccessSequence();
+
+    EXPECT_EQ(raw->read32(412), 0xDEADBEEF);
+}
+
+//---------------------------
+//real mock for pcieDevice functionality above
+
+#include <gmock/gmock.h>
+
+class FakeBackend : public IMmioBackend
+{
+public:
+    MOCK_METHOD(uint32_t, read32, (std::size_t), (override));
+    MOCK_METHOD(void, write32, (std::size_t, uint32_t), (override));
+    MOCK_METHOD(void, burstRead32,
+                (std::size_t, uint32_t*, std::size_t),
+                (override));
+};
+
+//-----------
+//test
+using ::testing::_;
+using ::testing::Return;
+using ::testing::Exactly;
+
+TEST(PcieDeviceTest, CallsCorrectSequence)
+{
+    auto mock = std::make_unique<FakeBackend>();
+    FakeBackend* raw = mock.get();
+
+    EXPECT_CALL(*raw, read32(_)).Times(3);
+    EXPECT_CALL(*raw, burstRead32(_, _, 100)).Times(1);
+    EXPECT_CALL(*raw, write32(_, _)).Times(1);
+
+    PcieDevice device(std::move(mock));
+    device.performAccessSequence();
+}
