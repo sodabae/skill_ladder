@@ -1,0 +1,13 @@
+
+{
+  "backend": {
+    "type": "mock2",
+    "device": "0000:01:00.0",
+    "bar": 0,
+    "size": 4096
+  },
+  "access": {
+    "offset": 0,
+    "burst_count": 100
+  }
+}
