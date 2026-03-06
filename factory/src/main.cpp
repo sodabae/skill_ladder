@@ -22,7 +22,7 @@ int main()
             backendCfg["type"],
             backendCfg);
 
-    PcieDevice device(std::move(backend));
+    PcieDevice device(backendCfg, std::move(backend));
 
     //device.performAccessSequence();
 

@@ -1,6 +1,7 @@
 
 
 #include <vector>
+#include <iostream>
 
 #include "BackendRegistry.h"
 #include "IMmioBackend.h"

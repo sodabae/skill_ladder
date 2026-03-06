@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <cstring>
+#include <iostream>
 
 #include <fcntl.h>
 #include <unistd.h>

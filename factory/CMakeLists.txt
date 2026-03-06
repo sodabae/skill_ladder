@@ -7,6 +7,7 @@ project(factory)
 
 add_executable(factory
     src/main.cpp
+    src/PcieDevice.cpp
 )
 
 target_include_directories(factory PUBLIC
