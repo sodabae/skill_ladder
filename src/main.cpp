@@ -7,6 +7,7 @@
 #include "UpdateEvent.h"
 #include "MovementSystem.h"
 #include "Logger.h"
+#include "Particle.h"
 
 int main()
 {
@@ -15,6 +16,10 @@ int main()
     MovementSystem movement(bus);
     Logger logger(bus);
     logger.subscribeUpdateEvent();
+
+    Particle p1{0, 0, 1.0f, 0.5f};
+
+    movement.addParticle(p1);
 
     for (int i=0; i<5; ++i)
     {

@@ -1,9 +1,11 @@
 #pragma once
 
 #include <iostream>
+#include <vector>
 
 #include "eventBus.h"
 #include "UpdateEvent.h"
+#include "Particle.h"
 
 class MovementSystem
 {
@@ -19,17 +21,36 @@ public:
         );
     }
 
+    void addParticle(const Particle& p)
+    {
+        m_particles.push_back(p);
+    }
+
+
 private:
     void onUpdate(const UpdateEvent& e)
     {
-        m_position += m_speed * e.deltaTime;
-        std::cout << "Position: " << m_position << "\n";
+        for (auto& p : m_particles)
+        {
+            p.x += p.vx * e.deltaTime;
+            p.y += p.vy * e.deltaTime;
+        }
+        printParticles();
     }
+
+    void printParticles()
+    {
+        for (const auto& p : m_particles)
+        {
+            std::cout << "Particle: " << p.x << ", " << p.y << "\n";
+        }
+        std::cout << "----------" << std::endl;
+    }
+
 
 private:
     eventBus::Subscription m_subscription;
     eventBus&    m_bus;
 
-    float m_speed   {5.f};    //units per second
-    float m_position{0.f};
+    std::vector<Particle> m_particles{};
 };
