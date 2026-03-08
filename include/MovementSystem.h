@@ -55,10 +55,11 @@ private:
 
     void printParticles()
     {
-        for (const auto& p : m_particles)
+        for (std::size_t i=1; i<=m_particles.size(); ++i)
         {
-            std::cout << "Particle: " << p.x << ", " << p.y
-                      << "  vel(" << p.vx << ", " << p.vy << ")" << std::endl;
+            const auto& p = m_particles[i-1];
+            std::cout << "Particle #" << i << ": pos(" << p.x << ", " << p.y
+                      << ")  vel(" << p.vx << ", " << p.vy << ")" << std::endl;
         }
         std::cout << "----------" << std::endl;
     }
