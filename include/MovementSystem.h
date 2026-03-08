@@ -30,10 +30,25 @@ public:
 private:
     void onUpdate(const UpdateEvent& e)
     {
+        const float gravity = -9.8f;
+        const float floorY  = 0.0f;
+        const float bounce  = 0.8f;
+
         for (auto& p : m_particles)
         {
+            //applying gravity
+            p.vy += gravity * e.deltaTime;
+
+            // integrate velocity
             p.x += p.vx * e.deltaTime;
             p.y += p.vy * e.deltaTime;
+
+            //floor collision
+            if (p.y - p.radius < floorY)
+            {
+                p.y  = floorY + p.radius;
+                p.vy = -p.vy * bounce;
+            }
         }
         printParticles();
     }
@@ -42,7 +57,8 @@ private:
     {
         for (const auto& p : m_particles)
         {
-            std::cout << "Particle: " << p.x << ", " << p.y << "\n";
+            std::cout << "Particle: " << p.x << ", " << p.y
+                      << "  vel(" << p.vx << ", " << p.vy << ")" << std::endl;
         }
         std::cout << "----------" << std::endl;
     }
