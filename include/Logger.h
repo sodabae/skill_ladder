@@ -5,8 +5,9 @@
 
 #include "eventBus.h"
 #include "UpdateEvent.h"
+#include "System.h"
 
-class Logger
+class Logger : public System
 {
 public:    
     Logger(eventBus& bus) : 

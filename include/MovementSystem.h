@@ -6,8 +6,9 @@
 #include "eventBus.h"
 #include "UpdateEvent.h"
 #include "Particle.h"
+#include "System.h"
 
-class MovementSystem
+class MovementSystem : public System
 {
 public:
     MovementSystem(eventBus& bus) : 
