@@ -1,0 +1,290 @@
+project/
+│
+├─ include/
+│   ├─ inputs.h
+│   ├─ outputs.h
+│   ├─ translator_traits.h
+│
+└─ main.cpp
+
+
+
+//-----------------------------------
+// inputs.h
+
+#pragma once
+#include <string>
+
+struct SensorInput
+{
+    int id;
+    double temperature;
+    double humidity;
+};
+
+struct NetworkPacket
+{
+    int source;
+    int destination;
+    std::string payload;
+};
+
+struct UserCommand
+{
+    std::string user;
+    std::string command;
+    int priority;
+};
+
+
+//-----------------------------------
+// outputs.h
+
+#pragma once
+#include <string>
+#include <chrono>
+
+struct SensorRecord
+{
+    int id;
+    double temperature;
+    double humidity;
+
+    std::chrono::system_clock::time_point timestamp;
+    bool valid;
+};
+
+struct PacketLog
+{
+    int source;
+    int destination;
+    std::string payload;
+
+    size_t payloadSize;
+    bool checksumOk;
+};
+
+struct CommandTask
+{
+    std::string user;
+    std::string command;
+    int priority;
+
+    int taskId;
+    bool queued;
+};
+
+
+//-----------------------------------
+// translator_traits.h
+
+#pragma once
+
+#include <chrono>
+#include "inputs.h"
+#include "outputs.h"
+
+//------------------------------------------------------------
+// TRAITS DECLARATION
+//------------------------------------------------------------
+
+template<typename T>
+struct Translator;
+
+
+//------------------------------------------------------------
+// OUTPUT TYPE ALIAS (THE "UPGRADE")
+//------------------------------------------------------------
+
+template<typename T>
+using translated_t = typename Translator<T>::Output;
+
+
+//------------------------------------------------------------
+// TRANSLATE FUNCTION
+//------------------------------------------------------------
+
+template<typename T>
+translated_t<T> translate(const T& input)
+{
+    return Translator<T>::translate(input);
+}
+
+
+
+//------------------------------------------------------------
+// Sensor
+//------------------------------------------------------------
+
+template<>
+struct Translator<SensorInput>
+{
+    using Output = SensorRecord;
+
+    static Output translate(const SensorInput& in)
+    {
+        return {
+            in.id,
+            in.temperature,
+            in.humidity,
+            std::chrono::system_clock::now(),
+            true
+        };
+    }
+};
+
+//------------------------------------------------------------
+// Packet
+//------------------------------------------------------------
+
+template<>
+struct Translator<NetworkPacket>
+{
+    using Output = PacketLog;
+
+    static Output translate(const NetworkPacket& in)
+    {
+        return {
+            in.source,
+            in.destination,
+            in.payload,
+            in.payload.size(),
+            true
+        };
+    }
+};
+
+//------------------------------------------------------------
+// Command
+//------------------------------------------------------------
+
+template<>
+struct Translator<UserCommand>
+{
+    using Output = CommandTask;
+
+    static Output translate(const UserCommand& in)
+    {
+        static int nextId = 1;
+
+        return {
+            in.user,
+            in.command,
+            in.priority,
+            nextId++,
+            true
+        };
+    }
+};
+
+
+//-----------------------------------
+// main.cpp
+
+
+#include <iostream>
+#include "translator_traits.h"
+
+int main()
+{
+    SensorInput sensor{1, 23.4, 40.1};
+    NetworkPacket packet{10, 20, "HELLO"};
+    UserCommand cmd{"alice", "restart", 5};
+
+    auto sensorOut = translate(sensor);
+    auto packetOut = translate(packet);
+    auto cmdOut = translate(cmd);
+
+    std::cout << sensorOut.id << "\n";
+    std::cout << packetOut.payloadSize << "\n";
+    std::cout << cmdOut.taskId << "\n";
+}
+
+
+Why the Upgrade (translated_t) Matters
+Without it:
+-----------
+auto out = translate(input);
+-----------
+
+But in templates you often need:
+-----------
+typename Translator<T>::Output
+-----------
+
+The alias simplifies that to:
+-----------
+translated_t<T>
+-----------
+
+Example:
+-----------
+template<typename T>
+translated_t<T> process(const T& input)
+{
+    return translate(input);
+}
+-----------
+This becomes very useful in large template systems.
+
+
+
+//-------------------------------------------------------
+//-------------------------------------------------------
+// template + specialization
+//-------------------------------------------------------
+//-------------------------------------------------------
+// see inputs.h, outputs.h, and main.cpp above
+//-------------------------------------------------------
+
+//include/translate.h
+
+#pragma once
+
+#include <chrono>
+
+#include "inputs.h"
+#include "outputs.h"
+
+// generic template
+template<typename T>
+auto translate(const T& input);
+
+
+template<>
+SensorRecord translate<SensorInput>(const SensorInput& in)
+{
+    return {
+        in.id,
+        in.temperature,
+        in.humidity,
+        std::chrono::system_clock::now(),
+        true
+    };
+}
+
+template<>
+PacketLog translate<NetworkPacket>(const NetworkPacket& in)
+{
+    return {
+        in.source,
+        in.destination,
+        in.payload,
+        in.payload.size(),
+        true
+    };
+}
+
+template<>
+CommandTask translate<UserCommand>(const UserCommand& in)
+{
+    static int nextId = 1;
+
+    return {
+        in.user,
+        in.command,
+        in.priority,
+        nextId++,
+        true
+    };
+}
