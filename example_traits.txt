@@ -288,3 +288,273 @@ CommandTask translate<UserCommand>(const UserCommand& in)
         true
     };
 }
+
+
+
+
+
+//----------------------------------------------------------------
+//----------------------------------------------------------------
+//----------------------------------------------------------------
+// Generate loop
+//----------------------------------------------------------------
+//----------------------------------------------------------------
+//----------------------------------------------------------------
+//----------------------------------------------------------------
+
+#include <iostream>
+#include <string>
+#include <tuple>
+#include <chrono>
+
+//////////////////////////////////////////////////////////////
+// outputs.h (simulated)
+//////////////////////////////////////////////////////////////
+
+struct SensorRecord
+{
+    int id;
+    double temperature;
+    double humidity;
+    std::chrono::system_clock::time_point timestamp;
+    bool valid;
+
+    static SensorRecord generateDummy()
+    {
+        std::cout << "Generating SensorRecord\n";
+        return {1, 22.5, 55.0, std::chrono::system_clock::now(), true};
+    }
+};
+
+struct PacketLog
+{
+    int source;
+    int destination;
+    std::string payload;
+    size_t payloadSize;
+    bool checksumOk;
+
+    static PacketLog generateDummy()
+    {
+        std::cout << "Generating PacketLog\n";
+        return {10, 20, "HELLO", 5, true};
+    }
+};
+
+struct CommandTask
+{
+    std::string user;
+    std::string command;
+    int priority;
+    int taskId;
+    bool queued;
+
+    static CommandTask generateDummy()
+    {
+        std::cout << "Generating CommandTask\n";
+        return {"alice", "restart_service", 5, 1001, true};
+    }
+};
+
+//////////////////////////////////////////////////////////////
+// Compile-time "loop over types"
+//////////////////////////////////////////////////////////////
+
+template<typename... Ts>
+auto generateAllDummy()
+{
+    return std::tuple<Ts...>{ Ts::generateDummy()... };
+}
+
+//////////////////////////////////////////////////////////////
+// Helper to iterate tuple at runtime
+//////////////////////////////////////////////////////////////
+
+template<typename Tuple, typename Func, std::size_t... I>
+void tupleForEachImpl(Tuple& t, Func f, std::index_sequence<I...>)
+{
+    (f(std::get<I>(t)), ...);
+}
+
+template<typename Tuple, typename Func>
+void tupleForEach(Tuple& t, Func f)
+{
+    tupleForEachImpl(
+        t,
+        f,
+        std::make_index_sequence<std::tuple_size_v<Tuple>>{}
+    );
+}
+
+//////////////////////////////////////////////////////////////
+// main.cpp
+//////////////////////////////////////////////////////////////
+
+int main()
+{
+    // Compile-time "loop"
+    auto messages = generateAllDummy<
+        SensorRecord,
+        PacketLog,
+        CommandTask
+    >();
+
+    std::cout << "\nNow iterating the generated objects:\n";
+
+    // Runtime iteration over generated objects
+    tupleForEach(messages, [](auto& msg)
+    {
+        std::cout << "Processing message object\n";
+    });
+
+    return 0;
+}
+
+//--------------------------
+--------
+generateAllDummy<SensorRecord, PacketLog, CommandTask>()
+--------
+
+is expanded by the compiler into something equivalent to:
+--------
+std::tuple<SensorRecord, PacketLog, CommandTask>{
+    SensorRecord::generateDummy(),
+    PacketLog::generateDummy(),
+    CommandTask::generateDummy()
+};
+--------
+
+So the compiler effectively generates code like:
+--------
+SensorRecord::generateDummy()
+PacketLog::generateDummy()
+CommandTask::generateDummy()
+--------
+
+//------------------------------------------------------
+//------------------------------------------------------
+//------------------------------------------------------
+// Simpler
+//------------------------------------------------------
+//------------------------------------------------------
+//------------------------------------------------------
+//------------------------------------------------------
+If you only want to call the functions, not store the results:
+--------
+template<typename... Ts>
+void generateAllDummy()
+{
+    (Ts::generateDummy(), ...);
+}
+--------
+
+Usage:
+--------
+generateAllDummy<
+    SensorRecord,
+    PacketLog,
+    CommandTask
+>();
+--------
+
+
+
+//------------------------------------------------------
+//------------------------------------------------------
+//------------------------------------------------------
+//------------------------------------------------------
+// Example 2
+//------------------------------------------------------
+//------------------------------------------------------
+//------------------------------------------------------
+//------------------------------------------------------
+
+// outputs.h
+
+#pragma once
+#include <iostream>
+#include <string>
+#include <chrono>
+
+struct SensorRecord
+{
+    int id;
+    double temperature;
+    double humidity;
+
+    static void generateDummy()
+    {
+        std::cout << "SensorRecord dummy generated\n";
+    }
+};
+
+struct PacketLog
+{
+    int source;
+    int destination;
+    std::string payload;
+
+    static void generateDummy()
+    {
+        std::cout << "PacketLog dummy generated\n";
+    }
+};
+
+struct CommandTask
+{
+    std::string user;
+    std::string command;
+    int priority;
+
+    static void generateDummy()
+    {
+        std::cout << "CommandTask dummy generated\n";
+    }
+};
+
+////---------
+type_list.h
+#pragma once
+
+template<typename... Ts>
+struct TypeList {};
+
+
+
+////---------
+generator.h
+#pragma once
+#include "type_list.h"
+
+template<typename... Ts>
+void callGenerate(TypeList<Ts...>)
+{
+    (Ts::generateDummy(), ...);
+}
+
+
+////---------
+messages.h
+#pragma once
+
+#include "type_list.h"
+#include "outputs.h"
+
+using AllOutputs = TypeList<
+    SensorRecord,
+    PacketLog,
+    CommandTask
+>;
+
+
+
+////---------
+main.cpp
+
+#include "generator.h"
+#include "messages.h"
+
+int main()
+{
+    callGenerate(AllOutputs{});
+}
