@@ -61,6 +61,13 @@ struct Vec2
         return x*x + y*y;
     }
 
+    Vec2& operator-=(const Vec2& o)
+    {
+        x -= o.x;
+        y -= o.y;
+        return *this;
+    }
+
     Vec2& operator+=(const Vec2& o)
     {
         x += o.x;
