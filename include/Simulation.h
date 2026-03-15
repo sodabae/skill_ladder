@@ -32,6 +32,8 @@ public:
         m_running = true;
 
         auto previous = std::chrono::steady_clock::now();
+        const float fixedDt = 1.0f / 60.0f;   //60Hz
+        float accumulator = 0.0f;
 
         while(m_running)
         {
@@ -40,11 +42,17 @@ public:
             float dt = std::chrono::duration<float>(now-previous).count();
             previous = now;
 
-            UpdateEvent e{dt};
-            m_bus.publish(e);
+            accumulator += dt;
 
-            //add artificial delay
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            while (accumulator >= fixedDt)
+            {
+                UpdateEvent e{fixedDt};
+                m_bus.publish(e);
+                accumulator -= fixedDt;
+            }
+
+            //small sleep to avoid busy-waiting
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
         shutdownSystems();

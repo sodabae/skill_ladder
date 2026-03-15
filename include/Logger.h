@@ -16,6 +16,11 @@ public:
 
     }
 
+    void initialize() override
+    {
+        subscribeUpdateEvent();
+    }
+
     void subscribeUpdateEvent()
     {
         m_subscriptions.push_back(
@@ -27,10 +32,11 @@ public:
             )
         );
     }
+
 private:
     void onUpdate(const UpdateEvent& e)
     {
-        std::cout << "Logger Class: deltaTime = " << e.deltaTime << "\n";
+        std::cout << "Logger Class: deltaTime = " << e.deltaTime << std::endl;
     }
 
 private:
