@@ -7,6 +7,7 @@
 #include "UpdateEvent.h"
 #include "Particle.h"
 #include "System.h"
+#include "SpatialGrid.h"
 
 class MovementSystem : public System
 {
@@ -64,65 +65,48 @@ private:
 
         }
         //-------------------------------------------------
-        // 2) Particle-particle collisions
+        // 2) Build the spatial grid
+        //-------------------------------------------------
+        grid.clear();
+
+        for (auto& p : m_particles)
+        {
+            grid.insert(&p);
+        }
+
+        //-------------------------------------------------
+        // 3) Particle-particle collisions using the grid
         //-------------------------------------------------
         //particle collision
-        for (size_t i=0; i<m_particles.size(); ++i)
+        for (auto& p : m_particles)
         {
-            for (size_t j=i+1; j<m_particles.size(); ++j)
+            auto [cx, cy] = grid.cellCoords(p.position);
+
+            for (int dx=-1; dx<=1; dx++)
             {
-                Particle& a = m_particles[i];
-                Particle& b = m_particles[j];
-
-                Vec2 delta = b.position - a.position;
-
-                float dist2 = delta.lengthSquared();
-                float radiusSum = a.radius + b.radius;
-
-                if (dist2 < radiusSum * radiusSum)
+                for (int dy=-1; dy<=1; dy++)
                 {
-                    float distance = std::sqrt(dist2);
-                    if (0.0f == distance)
-                        continue;
+                    auto& cell = grid.getCell(cx+dx, cy+dy);
 
-                    Vec2 normal = delta/distance;
-
-                    float penetration = radiusSum - distance;
-
-                    //Seperate particles
-                    a.position -= normal * (penetration * 0.5f);
-                    b.position += normal * (penetration * 0.5f);
-
-                    // Relative velocity
-                    Vec2 rv = b.velocity - a.velocity;
-
-                    float velAlongNormal = Vec2::dot(rv, normal);
-
-                    //Ignore if moving apart
-                    if (velAlongNormal > 0)
-                        continue;
-
-                    float restitution = 0.8f;
-
-                    float impuleMag = 
-                        -(1 + restitution) * velAlongNormal / 
-                        (a.inverseMass + b.inverseMass);
-
-                    Vec2 impulse = normal * impuleMag;
-
-                    a.velocity -= impulse * a.inverseMass;
-                    b.velocity += impulse * b.inverseMass;
+                    for (auto* other : cell)
+                    {
+                        if(&p >= other)
+                            continue;
+                        
+                        resolveCollision(p, *other);
+                    }
                 }
             }
         }
-
-        
+      
         for (auto& p : m_particles)
         {
             //Clear accumulated forces
             p.force = Vec2{0,0};
         }
         printParticles();
+
+        
     }
 
     void printParticles()
@@ -136,10 +120,63 @@ private:
         std::cout << "----------" << std::endl;
     }
 
+    void resolveCollision(Particle& a, Particle& b)
+    {
+
+        Vec2 delta = b.position - a.position;
+
+        float dist2 = delta.lengthSquared();
+        float radiusSum = a.radius + b.radius;
+
+        if(dist2 >= radiusSum * radiusSum)
+            return;
+
+        float distance = std::sqrt(dist2);
+        if (0.0f == distance)
+            return;
+
+        Vec2 normal = delta/distance;
+
+        float penetration = radiusSum - distance;
+
+        float totalInvMass = a.inverseMass + b.inverseMass;
+
+        if(totalInvMass == 0)
+            return;
+
+        Vec2 correction = normal * (penetration/totalInvMass);
+
+        //Seperate particles
+        a.position -= correction * a.inverseMass;
+        b.position += correction * b.inverseMass;
+
+        // Relative velocity
+        Vec2 rv = b.velocity - a.velocity;
+
+        float velAlongNormal = Vec2::dot(rv, normal);
+
+        //Ignore if moving apart
+        if (velAlongNormal > 0)
+            return;
+
+        float restitution = 0.8f;
+
+        float impulseMag = 
+            -(1 + restitution) * velAlongNormal / totalInvMass;
+
+        Vec2 impulse = normal * impulseMag;
+
+        a.velocity -= impulse * a.inverseMass;
+        b.velocity += impulse * b.inverseMass;
+        
+    }
+
 
 private:
     eventBus::Subscription m_subscription;
     eventBus&    m_bus;
 
     std::vector<Particle> m_particles{};
+
+    SpatialGrid grid{1.0f};
 };

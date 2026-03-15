@@ -5,10 +5,8 @@
 struct Particle
 {
     Particle (float m = 1.0f)
-    {
-        mass = m;
-        inverseMass = 1.0f / m;
-    }
+        : mass(m), inverseMass(1.0f/m)
+    {}
     Vec2 position;
     Vec2 velocity;
 
