@@ -1,12 +1,21 @@
 #pragma once
 
+#include "math/Vec2.h"
+
 struct Particle
 {
-    float x = 0.0f;
-    float y = 0.0f;
+    Particle (float m = 1.0f)
+    {
+        mass = m;
+        inverseMass = 1.0f / m;
+    }
+    Vec2 position;
+    Vec2 velocity;
 
-    float vx = 0.0f;
-    float vy = 0.0f;
+    Vec2 force;
 
     float radius = 0.2f;
+
+    float mass       = 1.0f;
+    float inverseMass = 1.0f/mass;    
 };

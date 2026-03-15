@@ -31,25 +31,36 @@ public:
 private:
     void onUpdate(const UpdateEvent& e)
     {
-        const float gravity = -9.8f;
+        //const float gravity = -9.8f;
         const float floorY  = 0.0f;
         const float bounce  = 0.8f;
+        
+        float dt = e.deltaTime;
+        Vec2 gravity{0.0f, -9.8f};
 
         for (auto& p : m_particles)
         {
-            //applying gravity
-            p.vy += gravity * e.deltaTime;
+            //applying gravity as a force
+            p.force += gravity * p.mass;
 
-            // integrate velocity
-            p.x += p.vx * e.deltaTime;
-            p.y += p.vy * e.deltaTime;
+            // convert force -> acceleration
+            Vec2 acceleration = p.force * p.inverseMass;
+
+            //Integrate velocity
+            p.velocity += acceleration * dt;
+
+            //Integrate position
+            p.position += p.velocity * dt;
 
             //floor collision
-            if (p.y - p.radius < floorY)
+            if (p.position.y - p.radius < floorY)
             {
-                p.y  = floorY + p.radius;
-                p.vy = -p.vy * bounce;
+                p.position.y  = floorY + p.radius;
+                p.velocity.y = -p.velocity.y * bounce;
             }
+
+            //Clear accumulated forces
+            p.force = Vec2{0,0};
         }
         printParticles();
     }
@@ -59,8 +70,8 @@ private:
         for (std::size_t i=1; i<=m_particles.size(); ++i)
         {
             const auto& p = m_particles[i-1];
-            std::cout << "Particle #" << i << ": pos(" << p.x << ", " << p.y
-                      << ")  vel(" << p.vx << ", " << p.vy << ")" << std::endl;
+            std::cout << "Particle #" << i << ": pos(" << p.position.x << ", " << p.position.y
+                      << ")  vel(" << p.velocity.x << ", " << p.velocity.y << ")" << std::endl;
         }
         std::cout << "----------" << std::endl;
     }

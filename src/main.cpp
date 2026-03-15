@@ -22,17 +22,16 @@ int main()
     //Logger logger(sim.getBus());
 
     auto& movement = sim.addSystem<MovementSystem>();
-    auto& logger   = sim.addSystem<Logger>(); 
-    logger.subscribeUpdateEvent();
+    [[maybe_unused]] auto& logger   = sim.addSystem<Logger>(); 
 
 
     for (int i=0; i<10; ++i)
     {
         Particle p;
-        p.x  = 0.5f * static_cast<float>(i);
-        p.y  = 5.0f + static_cast<float>(i);
-        p.vx = 0.5f * static_cast<float>(i);
-        p.vy = 0.0f;
+        p.position.x  = 0.5f * static_cast<float>(i);
+        p.position.y  = 5.0f + static_cast<float>(i);
+        p.velocity.x  = 0.5f * static_cast<float>(i);
+        p.velocity.y  = 0.0f;
 
         movement.addParticle(p);
     }
