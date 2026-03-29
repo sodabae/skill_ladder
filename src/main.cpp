@@ -17,6 +17,7 @@
 #include "SpatialPartitionSystem.h"
 #include "CollisionDetectionSystem.h"
 #include "CollisionResolutionSystem.h"
+#include "RenderSystem.h"
 #include "World.h"
 
 int main()
@@ -29,6 +30,7 @@ int main()
     [[maybe_unused]] auto& detect  = sim.addSystem<CollisionDetectionSystem>(spatial.getGrid());
     [[maybe_unused]] auto& resolve = sim.addSystem<CollisionResolutionSystem>();
     [[maybe_unused]] auto& logger  = sim.addSystem<Logger>();
+    [[maybe_unused]] auto& render  = sim.addSystem<RenderSystem>();
 
     auto& world = sim.getWorld();
 
