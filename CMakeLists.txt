@@ -29,7 +29,7 @@ target_compile_options(sim_eng PRIVATE ${SIM_ENG_WARNING_FLAGS})
 
 target_include_directories(sim_eng PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/event
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/event
 )
 
 if(COVERAGE)

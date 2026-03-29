@@ -8,10 +8,10 @@
 #include "System.h"
 #include "World.h"
 
-class Logger : public System
+class LoggerUpdate : public System
 {
 public:    
-    Logger(eventBus& bus, World& world) : 
+    LoggerUpdate(eventBus& bus, World& world) : 
         m_bus(bus), m_world(world)
     {
 

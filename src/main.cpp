@@ -10,9 +10,9 @@
 //#include "Particle.h"
 
 //#include "MovementSystem.h"
-#include "Logger.h"
+#include "LoggerUpdate.h"
+#include "LoggerCollision.h"
 #include "Simulation.h"
-//#include "CollisionLogger.h"
 #include "PhysicsIntegrationSystem.h"
 #include "SpatialPartitionSystem.h"
 #include "CollisionDetectionSystem.h"
@@ -29,7 +29,8 @@ int main()
     [[maybe_unused]] auto& spatial = sim.addSystem<SpatialPartitionSystem>(); 
     [[maybe_unused]] auto& detect  = sim.addSystem<CollisionDetectionSystem>(spatial.getGrid());
     [[maybe_unused]] auto& resolve = sim.addSystem<CollisionResolutionSystem>();
-    [[maybe_unused]] auto& logger  = sim.addSystem<Logger>();
+    [[maybe_unused]] auto& logger  = sim.addSystem<LoggerUpdate>();
+    [[maybe_unused]] auto& logCol  = sim.addSystem<LoggerCollision>();
     [[maybe_unused]] auto& render  = sim.addSystem<RenderSystem>();
 
     auto& world = sim.getWorld();

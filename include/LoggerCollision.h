@@ -6,12 +6,14 @@
 #include "System.h"
 #include "eventBus.h"
 #include "CollisionEvent.h"
+#include "World.h"
 
-class CollisionLogger : public System
+class LoggerCollision
+     : public System
 {
 public: 
-    CollisionLogger(eventBus& bus)
-        :m_bus(bus){}
+    LoggerCollision(eventBus& bus, World& world)
+        :m_bus(bus), m_world(world){}
 
     void initialize() override
     {
@@ -37,4 +39,5 @@ private:
 private:
     eventBus& m_bus;
     std::vector<eventBus::Subscription> m_subscriptions;
+    World& m_world;
 };
