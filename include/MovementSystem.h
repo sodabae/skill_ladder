@@ -8,6 +8,7 @@
 #include "Particle.h"
 #include "System.h"
 #include "SpatialGrid.h"
+#include "CollisionEvent.h"
 
 class MovementSystem : public System
 {
@@ -169,6 +170,7 @@ private:
         a.velocity -= impulse * a.inverseMass;
         b.velocity += impulse * b.inverseMass;
         
+        m_bus.publish(CollisionEvent{&a, &b});
     }
 
 

@@ -6,12 +6,13 @@
 #include "eventBus.h"
 #include "UpdateEvent.h"
 #include "System.h"
+#include "World.h"
 
 class Logger : public System
 {
 public:    
-    Logger(eventBus& bus) : 
-        m_bus(bus)
+    Logger(eventBus& bus, World& world) : 
+        m_bus(bus), m_world(world)
     {
 
     }
@@ -42,6 +43,6 @@ private:
 private:
     eventBus& m_bus;
     std::vector<eventBus::Subscription> m_subscriptions;
-
+    World& m_world;
 
 };

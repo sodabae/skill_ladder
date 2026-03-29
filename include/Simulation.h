@@ -8,6 +8,7 @@
 #include "eventBus.h"
 #include "UpdateEvent.h"
 #include "System.h"
+#include "World.h"
 
 
 class Simulation
@@ -17,7 +18,7 @@ public:
     template <typename T, typename... Args>
     T& addSystem(Args&&... args)
     {
-        auto system = std::make_unique<T>(m_bus, std::forward<Args>(args)...);
+        auto system = std::make_unique<T>(m_bus, m_world, std::forward<Args>(args)...);
         T& ref = *system;
 
         system->initialize();
@@ -76,10 +77,16 @@ public:
         m_running = false;
     }
 
+    World& getWorld()
+    {
+        return m_world;
+    }
+
 
 private: 
     bool m_running{false};
     eventBus m_bus;
+    World m_world;
 
     std::vector<std::unique_ptr<System>> m_systems;
 };
