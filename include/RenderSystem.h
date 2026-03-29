@@ -26,8 +26,8 @@ private:
             std::cout << "Particle " << i
                       << " pos(" << p.position.x << ", " << p.position.y << ") "
                       << "vel(" << p.velocity.x << ", " << p.velocity.y << ")\n";
-            std::cout << "------" << std::endl;
         }
+        std::cout << "------" << std::endl;
     }
 
 private:

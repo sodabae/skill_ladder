@@ -37,6 +37,24 @@ private:
 
         a.position -= correction * a.inverseMass;
         b.position += correction * b.inverseMass;
+
+        //-------------------------------------------
+        //Velocity
+        Vec2 relativeVelocity = b.velocity - a.velocity;
+
+        float velAlongNormal = Vec2::dot(relativeVelocity, normal);
+
+        if (velAlongNormal > 0)
+            return;
+
+        float restitution = 0.8f;
+
+        float impulseMag = -(1.0f + restitution) * velAlongNormal / totalInvMass;
+
+        Vec2 impulse = normal * impulseMag;
+
+        a.velocity -= impulse * a.inverseMass;
+        b.velocity += impulse * b.inverseMass;
     }
 
 private: 

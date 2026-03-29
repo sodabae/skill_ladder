@@ -38,7 +38,8 @@ int main()
     for (int i=0; i<10; ++i)
     {
         Particle p;
-        p.position  = {static_cast<float>(i), 5.0f + static_cast<float>(i)};
+        p.position  = {static_cast<float>(i), 5.0f};
+        p.velocity  = { (i % 2 == 0 ? 1.0f : -1.0f), 0.0f };
         world.particles.push_back(p);
     }
 
