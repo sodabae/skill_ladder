@@ -1,0 +1,218 @@
+
+# 1. Create the folder and files
+mkdir -p ~/.vscode/extensions/tab-sorter-0.0.1
+
+-------------------------------------------------------
+~/.vscode/extensions/tab-sorter-0.0.1/package.json
+
+cat > ~/.vscode/extensions/tab-sorter-0.0.1/package.json << 'EOF'
+{
+  "name": "tab-sorter",
+  "displayName": "Tab Sorter",
+  "description": "Sorts tabs alphabetically on open",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": { "vscode": "^1.0.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {}
+}
+EOF
+---------------------------------------------------------
+
+~/.vscode/extensions/tab-sorter-0.0.1/extension.js
+
+
+cat > ~/.vscode/extensions/tab-sorter-0.0.1/extension.js << 'EOF'
+const vscode = require('vscode');
+
+function activate(context) {
+    console.log('Tab Sorter: activated!');
+
+    const disposable = vscode.window.tabGroups.onDidChangeTabs((event) => {
+        console.log('Tab Sorter: tab change detected, opened:', event.opened.length, 'closed:', event.closed.length);
+        if (event.opened.length > 0) {
+            setTimeout(() => sortAllTabGroups(), 300);
+        }
+    });
+
+    context.subscriptions.push(disposable);
+}
+
+async function sortAllTabGroups() {
+    for (const group of vscode.window.tabGroups.all) {
+        await sortTabGroup(group);
+    }
+}
+
+async function sortTabGroup(group) {
+    const tabs = [...group.tabs];
+
+    const fileTabs = tabs.filter(tab => tab.input && tab.input.uri);
+    if (fileTabs.length < 2) return;
+
+    let n = fileTabs.length;
+    let swapped = true;
+
+    while (swapped) {
+        swapped = false;
+        const currentTabs = [...vscode.window.tabGroups.all
+            .find(g => g === group || g.viewColumn === group.viewColumn)
+            .tabs].filter(t => t.input && t.input.uri);
+
+        for (let i = 0; i < currentTabs.length - 1; i++) {
+            const a = currentTabs[i].label.toLowerCase();
+            const b = currentTabs[i + 1].label.toLowerCase();
+
+            if (a.localeCompare(b) > 0) {
+                await vscode.window.showTextDocument(currentTabs[i + 1].input.uri, {
+                    preview: false,
+                    preserveFocus: false,
+                });
+                await vscode.commands.executeCommand('moveActiveEditor', {
+                    to: 'left',
+                    by: 'tab'
+                });
+                swapped = true;
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+        n--;
+    }
+
+    if (group.activeTab && group.activeTab.input && group.activeTab.input.uri) {
+        await vscode.window.showTextDocument(group.activeTab.input.uri, {
+            preview: false,
+            preserveFocus: false,
+        });
+    }
+}
+
+function deactivate() {}
+
+module.exports = { activate, deactivate };
+EOF
+
+
+-----------------------------------------------------------------
+Handles split Windows:
+
+cat > ~/.vscode/extensions/tab-sorter-0.0.1/extension.js << 'EOF'
+const vscode = require('vscode');
+
+function activate(context) {
+    console.log('Tab Sorter: activated!');
+
+    const disposable = vscode.window.tabGroups.onDidChangeTabs((event) => {
+        console.log('Tab Sorter: tab change detected, opened:', event.opened.length, 'closed:', event.closed.length);
+        if (event.opened.length > 0) {
+            setTimeout(() => sortAllTabGroups(), 300);
+        }
+    });
+
+    context.subscriptions.push(disposable);
+}
+
+async function sortAllTabGroups() {
+    for (const group of vscode.window.tabGroups.all) {
+        await sortTabGroup(group);
+    }
+}
+
+async function sortTabGroup(group) {
+    const fileTabs = group.tabs.filter(tab => tab.input && tab.input.uri);
+    if (fileTabs.length < 2) return;
+
+    let swapped = true;
+    while (swapped) {
+        swapped = false;
+
+        // Re-read this group's tabs fresh each pass
+        const freshGroup = vscode.window.tabGroups.all.find(g => g === group);
+        if (!freshGroup) return;
+
+        const currentTabs = freshGroup.tabs.filter(t => t.input && t.input.uri);
+
+        for (let i = 0; i < currentTabs.length - 1; i++) {
+            const a = currentTabs[i].label.toLowerCase();
+            const b = currentTabs[i + 1].label.toLowerCase();
+
+            if (a.localeCompare(b) > 0) {
+                await vscode.window.showTextDocument(currentTabs[i + 1].input.uri, {
+                    preview: false,
+                    preserveFocus: false,
+                    viewColumn: group.viewColumn
+                });
+                await vscode.commands.executeCommand('moveActiveEditor', {
+                    to: 'left',
+                    by: 'tab'
+                });
+                swapped = true;
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+    }
+
+    if (group.activeTab && group.activeTab.input && group.activeTab.input.uri) {
+        await vscode.window.showTextDocument(group.activeTab.input.uri, {
+            preview: false,
+            preserveFocus: false,
+            viewColumn: group.viewColumn
+        });
+    }
+}
+
+function deactivate() {}
+module.exports = { activate, deactivate };
+EOF
+
+
+
+
+
+
+
+
+------------------------------------------------------------------
+
+run these 2 commands with VS Code closed:
+
+
+# 1. Register it in extensions.json
+python3 -c "
+import json, os
+path = os.path.expanduser('~/.vscode/extensions/extensions.json')
+with open(path, 'r') as f:
+    data = json.load(f)
+entry = {
+    'identifier': {'id': 'local.tab-sorter'},
+    'version': '0.0.1',
+    'location': {'\$mid': 1, 'path': os.path.expanduser('~/.vscode/extensions/tab-sorter-0.0.1'), 'scheme': 'file'},
+    'relativeLocation': 'tab-sorter-0.0.1',
+    'metadata': {'isBuiltin': False, 'isApplicationScoped': False, 'isMachineScoped': False, 'installedTimestamp': 1700000000000, 'source': 'gallery'}
+}
+data = [x for x in data if 'tab-sorter' not in x['identifier']['id']]
+data.append(entry)
+with open(path, 'w') as f:
+    json.dump(data, f, indent=2)
+print('Done')
+"
+
+
+# 2. Remove from .obsolete if it ends up there
+python3 -c "
+import json, os
+path = os.path.expanduser('~/.vscode/extensions/.obsolete')
+with open(path, 'r') as f:
+    data = json.load(f)
+data = {k: v for k, v in data.items() if 'tab-sorter' not in k}
+with open(path, 'w') as f:
+    json.dump(data, f)
+print('Done')
+"
+
+
+
+-----------------------------------
+To debug:
+Help → Toggle Developer Tools -> console (tab)
