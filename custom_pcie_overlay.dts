@@ -1,0 +1,71 @@
+/*
+ * custom_pcie_overlay.dts
+ *
+ * Example device-tree overlay fragment for the Jetson Orin NX PCIe
+ * endpoint used by custom_pcie_driver.c.
+ *
+ * This is a FRAGMENT you merge into (or overlay onto) your board's PCIe
+ * controller/root-port node -- it is not a complete, standalone board
+ * DTS. On Jetson Orin NX (L4T), the relevant base node is typically
+ * something like "pcie@141a0000" (C5/C4 controller instance varies by
+ * carrier board and which M.2/PCIe slot your FPGA is wired to). Check
+ * your specific L4T BSP's tegra234-p3767-*.dts / p3768 carrier files
+ * for the exact controller node label and unit-address, then add an
+ * "endpoint" child node like the one below under it.
+ *
+ * The child node's "reg" property must encode the endpoint's PCI
+ * bus/device/function so the kernel's PCI-OF core associates this DT
+ * node with the resulting struct pci_dev automatically
+ * (see drivers/pci/of.c: pci_set_of_node()/of_pci_find_child_device()).
+ * That's what lets probe() read vendor-id/device-id/names via
+ * pdev->dev.of_node without any extra glue code.
+ *
+ * Build with your L4T overlay flow, e.g.:
+ *   dtc -@ -I dts -O dtb -o custom_pcie_overlay.dtbo custom_pcie_overlay.dts
+ * and register it via /boot/extlinux/extlinux.conf's OVERLAYS line, or
+ * merge the fragment directly into your board .dts if you are building
+ * a full custom DTB.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		/* Replace with the actual root-port/controller node this
+		 * endpoint is downstream of on your carrier board, e.g.
+		 * &pcie_c5 or the appropriate tegra234 PCIe controller
+		 * alias/label from your BSP. */
+		target = <&pcie_ep_root_port>;
+
+		__overlay__ {
+			status = "okay";
+
+			/* Endpoint device node. "reg" here follows the
+			 * standard PCI OF binding: the first cell encodes
+			 * bus/device/function (phys.hi), the remaining
+			 * cells are address/size and are left zero since
+			 * we aren't statically assigning BAR ranges here.
+			 *
+			 * Example below assumes device 0, function 0 on
+			 * whatever bus number the root port enumerates it
+			 * on -- adjust the bus number nibble if needed.
+			 */
+			fpga_endpoint: endpoint@0 {
+				compatible = "pci10ee,903f"; /* vendor,device in hex, no 0x prefix, lowercase */
+				reg = <0x000000 0 0 0 0>;
+
+				/* Custom properties consumed by
+				 * custom_pcie_driver.c: */
+				vendor-id = <0x10EE>;
+				device-id = <0x903F>;
+
+				/* Up to 32 names -> up to 32 char devices,
+				 * one per MSI/MSI-X vector, in order. */
+				names = "fpga_irq0", "fpga_irq1", "fpga_irq2", "fpga_irq3";
+
+				status = "okay";
+			};
+		};
+	};
+};
